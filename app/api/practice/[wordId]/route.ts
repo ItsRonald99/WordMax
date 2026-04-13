@@ -22,6 +22,18 @@ export async function POST(
       return NextResponse.json({ error: 'correct (boolean) is required' }, { status: 400 })
     }
 
+    // Verify the word belongs to this user before recording any results
+    const { data: word } = await supabase
+      .from('words')
+      .select('id')
+      .eq('id', wordId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (!word) {
+      return NextResponse.json({ error: 'Word not found' }, { status: 404 })
+    }
+
     const now = new Date()
 
     // Insert review record

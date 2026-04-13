@@ -101,19 +101,33 @@ create policy "exercises_insert_via_word" on public.exercises
     )
   );
 
--- Reviews: users can only access their own
+-- Reviews: users can only access their own AND the referenced word must also be theirs
 create policy "reviews_select_own" on public.reviews
   for select using (auth.uid() = user_id);
 
 create policy "reviews_insert_own" on public.reviews
-  for insert with check (auth.uid() = user_id);
+  for insert with check (
+    auth.uid() = user_id
+    AND exists (
+      select 1 from public.words
+      where words.id = word_id
+        and words.user_id = auth.uid()
+    )
+  );
 
--- Word progress: users can only access their own
+-- Word progress: users can only access their own AND the referenced word must also be theirs
 create policy "word_progress_select_own" on public.word_progress
   for select using (auth.uid() = user_id);
 
 create policy "word_progress_insert_own" on public.word_progress
-  for insert with check (auth.uid() = user_id);
+  for insert with check (
+    auth.uid() = user_id
+    AND exists (
+      select 1 from public.words
+      where words.id = word_id
+        and words.user_id = auth.uid()
+    )
+  );
 
 create policy "word_progress_update_own" on public.word_progress
   for update using (auth.uid() = user_id);
