@@ -44,6 +44,7 @@ export function WordCard({ word }: WordCardProps) {
         description: err instanceof Error ? err.message : 'Could not regenerate exercises.',
         variant: 'destructive',
       })
+    } finally {
       setGenerating(false)
     }
   }
