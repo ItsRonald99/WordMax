@@ -31,7 +31,7 @@ OPENAI_API_KEY=
 
 `AddWordForm` (client) → `POST /api/words` → inserts into `words` table → calls `generateExercises()` (OpenAI, non-fatal if it fails) → inserts into `exercises` table → inserts into `word_progress` with `next_review = now()`.
 
-Exercises are generated **once** at word creation and cached in the DB. Never regenerate on read.
+Exercises are generated **once** at word creation and cached in the DB. Never regenerate on read. `POST /api/exercises/[wordId]` exists only to generate exercises for words that were saved when OpenAI failed — it returns 409 if exercises already exist.
 
 ### Supabase client pattern
 
@@ -57,6 +57,12 @@ Lives in `app/api/practice/[wordId]/route.ts`:
 - Incorrect → `interval = 1`, `next_review = tomorrow`
 
 Words are due for practice when `word_progress.next_review <= now()`. Words with no `word_progress` record are also included (treated as immediately due).
+
+The SRS API is called **once per word per session**, not once per exercise. `PracticeSession` accumulates per-exercise results in a `Map<wordId, boolean[]>` and submits at session end — `correct: true` only if every exercise for that word was answered correctly. Do not call the practice API mid-session.
+
+### Dashboard stats vs. practice availability
+
+The dashboard `dueCount` stat counts directly from `word_progress` (all due records). The practice page additionally filters to words that have at least one exercise (`exercises.length > 0`). A word can appear due on the dashboard but not show up in practice if exercise generation failed at creation time.
 
 ### Database security model
 

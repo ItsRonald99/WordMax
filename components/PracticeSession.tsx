@@ -45,6 +45,7 @@ export function PracticeSession({ words }: PracticeSessionProps) {
   const [score, setScore] = useState({ correct: 0, incorrect: 0 })
   const [done, setDone] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [wordResults, setWordResults] = useState<Map<string, boolean[]>>(new Map())
 
   const current = items[index]
   const progress = items.length > 0 ? ((index) / items.length) * 100 : 0
@@ -98,7 +99,7 @@ export function PracticeSession({ words }: PracticeSessionProps) {
           <Button variant="outline" onClick={() => router.push('/dashboard')}>
             Dashboard
           </Button>
-          <Button onClick={() => { setIndex(0); setRevealed(false); setScore({ correct: 0, incorrect: 0 }); setDone(false) }}>
+          <Button onClick={() => { setIndex(0); setRevealed(false); setScore({ correct: 0, incorrect: 0 }); setDone(false); setWordResults(new Map()) }}>
             <RotateCcw className="w-4 h-4 mr-2" />
             Practice again
           </Button>
@@ -107,20 +108,27 @@ export function PracticeSession({ words }: PracticeSessionProps) {
     )
   }
 
+  async function submitWordResults(results: Map<string, boolean[]>) {
+    // One request per word: correct only if all exercises were answered correctly
+    await Promise.all(
+      Array.from(results.entries()).map(([wordId, answers]) =>
+        fetch(`/api/practice/${wordId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ correct: answers.every(Boolean) }),
+        }).catch(() => {}) // Non-critical — don't block practice flow
+      )
+    )
+  }
+
   async function markAnswer(correct: boolean) {
     if (submitting) return
     setSubmitting(true)
 
-    // Record review and update spaced repetition
-    try {
-      await fetch(`/api/practice/${current.wordId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ correct }),
-      })
-    } catch {
-      // Non-critical — don't block practice flow
-    }
+    // Accumulate this exercise's result under its word
+    const updatedResults = new Map(wordResults)
+    updatedResults.set(current.wordId, [...(updatedResults.get(current.wordId) ?? []), correct])
+    setWordResults(updatedResults)
 
     setScore((prev) => ({
       correct: prev.correct + (correct ? 1 : 0),
@@ -128,6 +136,7 @@ export function PracticeSession({ words }: PracticeSessionProps) {
     }))
 
     if (index + 1 >= items.length) {
+      await submitWordResults(updatedResults)
       setDone(true)
     } else {
       setIndex((i) => i + 1)
@@ -224,9 +233,14 @@ export function PracticeSession({ words }: PracticeSessionProps) {
       {!revealed && (
         <div className="flex justify-center">
           <button
-            onClick={() => {
-              if (index + 1 >= items.length) setDone(true)
-              else { setIndex((i) => i + 1); setRevealed(false) }
+            onClick={async () => {
+              if (index + 1 >= items.length) {
+                await submitWordResults(wordResults)
+                setDone(true)
+              } else {
+                setIndex((i) => i + 1)
+                setRevealed(false)
+              }
             }}
             className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
           >
