@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { generateExercises } from '@/lib/openai'
+import { generateExercises, validateWord } from '@/lib/openai'
 
 export async function POST(request: Request) {
   try {
@@ -18,6 +18,16 @@ export async function POST(request: Request) {
 
     if (!word || typeof word !== 'string') {
       return NextResponse.json({ error: 'Word is required' }, { status: 400 })
+    }
+
+    // Validate that the input is a real word before persisting anything.
+    // Fails open on OpenAI error so a transient outage never blocks creation.
+    const isValid = await validateWord(word.trim())
+    if (!isValid) {
+      return NextResponse.json(
+        { error: `"${word.trim()}" doesn't appear to be a valid word. Please enter a real English word.` },
+        { status: 400 }
+      )
     }
 
     // Save the word first

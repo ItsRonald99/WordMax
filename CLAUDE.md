@@ -9,9 +9,11 @@ npm run dev       # Start dev server at localhost:3000
 npm run build     # Production build (also runs type checking)
 npm run lint      # ESLint via next lint
 npx tsc --noEmit  # Type-check without building
+npm test          # Run Jest test suite
+npm run test:watch  # Jest in watch mode
 ```
 
-There are no tests. Type checking (`npx tsc --noEmit`) is the primary correctness gate before committing.
+Type checking (`npx tsc --noEmit`) and `npm test` are both correctness gates before committing. To run a single test file: `npm test -- path/to/file.test.ts`.
 
 ## Environment Variables
 
@@ -25,13 +27,21 @@ OPENAI_API_KEY=
 
 ## Architecture
 
-**Stack:** Next.js 14 App Router · TypeScript · Tailwind CSS · Supabase (Postgres + Auth) · OpenAI `gpt-4o-mini`
+**Stack:** Next.js 14 App Router · TypeScript · Tailwind CSS · Supabase (Postgres + Auth) · OpenAI `gpt-4o`
 
 ### Data flow for adding a word
 
-`AddWordForm` (client) → `POST /api/words` → inserts into `words` table → calls `generateExercises()` (OpenAI, non-fatal if it fails) → inserts into `exercises` table → inserts into `word_progress` with `next_review = now()`.
+`AddWordForm` (client) → `POST /api/words` → calls `validateWord()` (OpenAI, **fails open** on error) → inserts into `words` table → calls `generateExercises()` (OpenAI, non-fatal if it fails) → inserts into `exercises` table → inserts into `word_progress` with `next_review = now()`.
 
 Exercises are generated **once** at word creation and cached in the DB. Never regenerate on read. `POST /api/exercises/[wordId]` exists only to generate exercises for words that were saved when OpenAI failed — it returns 409 if exercises already exist.
+
+### Word validation
+
+`validateWord(word)` in `lib/openai.ts` sends a short zero-temperature prompt to `gpt-4o` and returns `{ isValid: boolean }`. It **fails open** — if OpenAI errors or times out, the word is accepted anyway. This means a transient API outage never blocks creation, but also means nonsense strings can occasionally slip through.
+
+### Deleting a word
+
+`DELETE /api/words/[wordId]` verifies auth and ownership, then deletes the word row. All related `exercises`, `reviews`, and `word_progress` rows are removed automatically via `ON DELETE CASCADE` in the schema — no manual cleanup needed.
 
 ### Supabase client pattern
 
@@ -66,7 +76,7 @@ The dashboard `dueCount` stat counts directly from `word_progress` (all due reco
 
 ### Database security model
 
-All four tables (`words`, `exercises`, `reviews`, `word_progress`) have RLS enabled. Key constraint: `exercises` and `reviews` insert policies enforce that the referenced `word_id` belongs to the authenticated user — this is checked at both the application layer (Route Handlers) and the database layer (RLS). Any new write routes that reference a `word_id` must verify ownership explicitly.
+All four tables (`words`, `exercises`, `reviews`, `word_progress`) have RLS enabled. Key constraint: `exercises` and `reviews` insert policies enforce that the referenced `word_id` belongs to the authenticated user — this is checked at both the application layer (Route Handlers) and the database layer (RLS). Any new write route that references a `word_id` must verify ownership explicitly before any mutation.
 
 ### UI conventions
 
@@ -75,3 +85,12 @@ All four tables (`words`, `exercises`, `reviews`, `word_progress`) have RLS enab
 - `cn()` from `lib/utils.ts` is the standard utility for merging Tailwind classes
 - All shared types are in `lib/types.ts`
 - Layout (sidebar) is defined per route group: `app/dashboard/layout.tsx`, `app/add/layout.tsx`, `app/practice/layout.tsx` — all three are identical and render `<Sidebar />`
+- After any client-side mutation (delete, generate exercises), call `router.refresh()` to reload server component data — do not manage server state locally in client components
+
+### Testing conventions
+
+Tests live in `__tests__/` and mirror the source structure (`components/`, `api/`, `lib/`). Shared fixtures are in `__tests__/fixtures.ts`.
+
+- **Component tests** use `jest-environment-jsdom` (default). Mock `next/navigation`, `@/lib/supabase/client`, and `@/components/ui/use-toast` at the top of each file.
+- **API route tests** require `/** @jest-environment node */` at the top of the file — route handlers import from `next/server` which needs the Node environment.
+- **OpenAI mocks**: mock the `openai` package with a lambda wrapper (`create: (...args) => mockCreate(...args)`) rather than a direct reference (`create: mockCreate`). Direct references fail because `jest.mock()` is hoisted before variable initializers run, putting `mockCreate` in the temporal dead zone when `new OpenAI()` is called at module load time.

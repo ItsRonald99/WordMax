@@ -3,6 +3,32 @@ import type { GeneratedExercise } from './types'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
+/**
+ * Returns true if the word appears to be a valid English word or recognised term.
+ * Fails open on any API error so a transient outage never blocks word creation.
+ */
+export async function validateWord(word: string): Promise<boolean> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'user',
+          content: `Is "${word}" a valid English word or commonly recognised term (including slang, technical terms, and proper nouns)? Reply only with JSON: {"isValid": true} or {"isValid": false}.`,
+        },
+      ],
+      temperature: 0,
+      max_tokens: 20,
+      response_format: { type: 'json_object' },
+    })
+    const content = response.choices[0]?.message?.content
+    if (!content) return true // fail open
+    return JSON.parse(content).isValid === true
+  } catch {
+    return true // fail open — don't block creation on API error
+  }
+}
+
 export async function generateExercises(
   word: string,
   sentence?: string | null,
@@ -48,7 +74,7 @@ Respond ONLY with valid JSON in this exact format:
 }`
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-4o',
     messages: [
       {
         role: 'system',

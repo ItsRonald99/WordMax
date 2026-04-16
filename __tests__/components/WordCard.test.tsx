@@ -1,7 +1,22 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useRouter } from 'next/navigation'
 import { WordCard } from '@/components/WordCard'
 import { mockWord, mockWordNoExercises, mockExercises } from '../fixtures'
+
+jest.mock('next/navigation', () => ({
+  useRouter: jest.fn(),
+}))
+
+jest.mock('@/components/ui/use-toast', () => ({
+  toast: jest.fn(),
+}))
+
+beforeEach(() => {
+  jest.clearAllMocks()
+  ;(useRouter as jest.Mock).mockReturnValue({ refresh: jest.fn(), push: jest.fn() })
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 })
+})
 
 describe('WordCard', () => {
   describe('rendering', () => {

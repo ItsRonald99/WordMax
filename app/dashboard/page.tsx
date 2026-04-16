@@ -76,17 +76,19 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
-              <Repeat2 className="w-4 h-4 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">{dueCount}</p>
-              <p className="text-xs text-muted-foreground">Due for review</p>
-            </div>
-          </CardContent>
-        </Card>
+        <Link href="/practice" className="block group/card">
+          <Card className="transition-shadow hover:shadow-md cursor-pointer">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                <Repeat2 className="w-4 h-4 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-foreground">{dueCount}</p>
+                <p className="text-xs text-muted-foreground">Due for review</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
 
         <Card className="col-span-2 md:col-span-1">
           <CardContent className="p-4 flex items-center gap-3">

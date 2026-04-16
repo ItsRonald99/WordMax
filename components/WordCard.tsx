@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { BookOpen, Calendar, Tag, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { BookOpen, Calendar, Tag, ChevronDown, ChevronUp, Sparkles, Trash2, Loader2 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { toast } from '@/components/ui/use-toast'
 import { formatRelativeDate, exerciseTypeLabel } from '@/lib/utils'
 import type { Word } from '@/lib/types'
 
@@ -13,8 +15,53 @@ interface WordCardProps {
 }
 
 export function WordCard({ word }: WordCardProps) {
+  const router = useRouter()
   const [expanded, setExpanded] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
   const hasExercises = word.exercises && word.exercises.length > 0
+
+  async function handleGenerateExercises() {
+    setGenerating(true)
+    try {
+      const res = await fetch(`/api/exercises/${word.id}`, { method: 'POST' })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to generate exercises')
+      }
+      toast({ title: 'Exercises generated!', variant: 'success' })
+      router.refresh()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Could not generate exercises.',
+        variant: 'destructive',
+      })
+      setGenerating(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm(`Delete "${word.word}"? This cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/words/${word.id}`, { method: 'DELETE' })
+      if (!res.ok && res.status !== 204) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to delete word')
+      }
+      toast({ title: `"${word.word}" deleted`, variant: 'success' })
+      router.refresh()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Could not delete word.',
+        variant: 'destructive',
+      })
+      setDeleting(false)
+    }
+  }
 
   return (
     <Card className="group hover:shadow-md transition-shadow duration-200">
@@ -60,24 +107,58 @@ export function WordCard({ word }: WordCardProps) {
             </div>
           </div>
 
-          {/* Expand button */}
-          {hasExercises && (
+          {/* Actions */}
+          <div className="flex items-center gap-1 shrink-0">
+            {!hasExercises && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs h-8"
+                disabled={generating}
+                onClick={handleGenerateExercises}
+              >
+                {generating ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3 h-3" />
+                )}
+                {generating ? 'Generating…' : 'Generate'}
+              </Button>
+            )}
+
             <Button
               variant="ghost"
               size="icon"
-              className="shrink-0 h-8 w-8 text-muted-foreground"
-              onClick={() => setExpanded(!expanded)}
-              aria-label={expanded ? 'Hide exercises' : 'Show exercises'}
+              className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-50"
+              disabled={deleting}
+              onClick={handleDelete}
+              aria-label="Delete word"
             >
-              {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              {deleting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
             </Button>
-          )}
+
+            {hasExercises && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground"
+                onClick={() => setExpanded(!expanded)}
+                aria-label={expanded ? 'Hide exercises' : 'Show exercises'}
+              >
+                {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Exercises preview */}
         {expanded && hasExercises && (
           <div className="mt-4 pt-4 border-t border-border space-y-3">
-            {word.exercises!.map((ex, i) => (
+            {word.exercises!.map((ex) => (
               <div key={ex.id} className="bg-slate-50 rounded-lg p-3">
                 <p className="text-[11px] font-semibold text-violet-600 uppercase tracking-wide mb-1">
                   {exerciseTypeLabel(ex.type)}
