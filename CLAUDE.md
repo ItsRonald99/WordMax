@@ -33,7 +33,7 @@ OPENAI_API_KEY=
 
 `AddWordForm` (client) → `POST /api/words` → calls `validateWord()` (OpenAI, **fails open** on error) → inserts into `words` table → calls `generateExercises()` (OpenAI, non-fatal if it fails) → inserts into `exercises` table → inserts into `word_progress` with `next_review = now()`.
 
-Exercises are generated **once** at word creation and cached in the DB. Never regenerate on read. `POST /api/exercises/[wordId]` exists only to generate exercises for words that were saved when OpenAI failed — it returns 409 if exercises already exist.
+Exercises are generated at word creation and cached in the DB. `POST /api/exercises/[wordId]` **always regenerates**: it generates a fresh set via OpenAI, deletes the old exercises, inserts the new ones, and resets `word_progress` to `interval=1, next_review=now()` — making the word immediately due for practice. Generation happens **before** deletion so that if OpenAI fails, the existing exercises are preserved.
 
 ### Word validation
 

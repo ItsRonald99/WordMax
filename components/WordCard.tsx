@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { BookOpen, Calendar, Tag, ChevronDown, ChevronUp, Sparkles, Trash2, Loader2 } from 'lucide-react'
+import { Calendar, Tag, ChevronDown, ChevronUp, Sparkles, Trash2, Loader2, RefreshCw } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,20 +22,26 @@ export function WordCard({ word }: WordCardProps) {
 
   const hasExercises = word.exercises && word.exercises.length > 0
 
-  async function handleGenerateExercises() {
+  async function handleRegenerateExercises() {
+    if (
+      !window.confirm(
+        `Regenerate exercises for "${word.word}"?\n\nThis will replace all existing exercises and reset your practice progress for this word.`
+      )
+    )
+      return
     setGenerating(true)
     try {
       const res = await fetch(`/api/exercises/${word.id}`, { method: 'POST' })
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.error || 'Failed to generate exercises')
+        throw new Error(err.error || 'Failed to regenerate exercises')
       }
-      toast({ title: 'Exercises generated!', variant: 'success' })
+      toast({ title: 'Exercises regenerated!', description: 'Progress has been reset.', variant: 'success' })
       router.refresh()
     } catch (err) {
       toast({
         title: 'Error',
-        description: err instanceof Error ? err.message : 'Could not generate exercises.',
+        description: err instanceof Error ? err.message : 'Could not regenerate exercises.',
         variant: 'destructive',
       })
       setGenerating(false)
@@ -109,22 +115,21 @@ export function WordCard({ word }: WordCardProps) {
 
           {/* Actions */}
           <div className="flex items-center gap-1 shrink-0">
-            {!hasExercises && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 text-xs h-8"
-                disabled={generating}
-                onClick={handleGenerateExercises}
-              >
-                {generating ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3 h-3" />
-                )}
-                {generating ? 'Generating…' : 'Generate'}
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs h-8"
+              disabled={generating}
+              onClick={handleRegenerateExercises}
+              aria-label="Regenerate exercises"
+            >
+              {generating ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3 h-3" />
+              )}
+              {generating ? 'Regenerating…' : 'Regenerate'}
+            </Button>
 
             <Button
               variant="ghost"
